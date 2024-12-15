@@ -2,9 +2,10 @@ import streamlit as st
 import warnings
 from crewai import Agent, Task, Crew, Process
 from crewai_tools import ScrapeWebsiteTool, SerperDevTool
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from dotenv import load_dotenv
 import os
+import nest_asyncio
 
 # Warning control
 warnings.filterwarnings('ignore')
@@ -12,18 +13,27 @@ warnings.filterwarnings('ignore')
 # Load environment variables
 load_dotenv()
 
+nest_asyncio.apply()
 
 def initialize_tools():
     return SerperDevTool(), ScrapeWebsiteTool()
 
 def create_agents(search_tool, scrape_tool):
+    # Initialize Gemini model
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-1.5-flash",
+        google_api_key=os.getenv("GOOGLE_API_KEY"),
+        temperature=0.7
+    )
+    
     data_analyst_agent = Agent(
         role="Data Analyst",
         goal="Monitor and analyze market data in real-time to identify trends and predict market movements.",
         backstory="Specializing in financial markets, this agent uses statistical modeling and machine learning to provide crucial insights.",
         verbose=True,
         allow_delegation=True,
-        tools=[scrape_tool, search_tool]
+        tools=[scrape_tool, search_tool],
+        llm=llm
     )
     
     trading_strategy_agent = Agent(
@@ -32,7 +42,8 @@ def create_agents(search_tool, scrape_tool):
         backstory="Equipped with a deep understanding of financial markets and quantitative analysis, this agent devises and refines trading strategies.",
         verbose=True,
         allow_delegation=True,
-        tools=[scrape_tool, search_tool]
+        tools=[scrape_tool, search_tool],
+        llm=llm
     )
     
     execution_agent = Agent(
@@ -41,7 +52,8 @@ def create_agents(search_tool, scrape_tool):
         backstory="This agent specializes in analyzing the timing, price, and logistical details of potential trades.",
         verbose=True,
         allow_delegation=True,
-        tools=[scrape_tool, search_tool]
+        tools=[scrape_tool, search_tool],
+        llm=llm
     )
     
     risk_management_agent = Agent(
@@ -50,7 +62,8 @@ def create_agents(search_tool, scrape_tool):
         backstory="Armed with a deep understanding of risk assessment models and market dynamics, this agent scrutinizes potential risks.",
         verbose=True,
         allow_delegation=True,
-        tools=[scrape_tool, search_tool]
+        tools=[scrape_tool, search_tool],
+        llm=llm
     )
     
     return [data_analyst_agent, trading_strategy_agent, execution_agent, risk_management_agent]
@@ -97,6 +110,10 @@ def main():
         run_analysis = st.button("Run Analysis")
     
     if run_analysis:
+        if not os.getenv("GOOGLE_API_KEY"):
+            st.error("Please set your GOOGLE_API_KEY in the environment variables.")
+            return
+            
         inputs = {
             'stock_selection': stock_selection,
             'initial_capital': str(initial_capital),
@@ -107,13 +124,21 @@ def main():
         
         with st.spinner("Initializing agents and tools..."):
             search_tool, scrape_tool = initialize_tools()
+            
+            # Initialize Gemini model for the crew manager
+            manager_llm = ChatGoogleGenerativeAI(
+                model="gemini-1.5-flash",
+                google_api_key=os.getenv("GOOGLE_API_KEY"),
+                temperature=0.7
+            )
+            
             agents = create_agents(search_tool, scrape_tool)
             tasks = create_tasks(agents, inputs)
             
             crew = Crew(
                 agents=agents,
                 tasks=tasks,
-                manager_llm=ChatOpenAI(model="gpt-3.5-turbo", temperature=0.7),
+                manager_llm=manager_llm,
                 process=Process.hierarchical,
                 verbose=True
             )

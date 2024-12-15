@@ -1,8 +1,8 @@
 streamlit
 crewai==0.28.8
 crewai_tools==0.1.6
-langchain_community==0.0.29
-langchain_openai
+langchain_google_genai
 python-dotenv
-pysqlite3-binary
+# pysqlite3-binary
 chromadb
+nest_asyncio
